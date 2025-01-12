@@ -1,18 +1,20 @@
-import { vec3, quat, mat4 } from 'gl-matrix';
+import { vec2, vec3, quat, mat4 } from 'gl-matrix';
+import { WGPU_RENDERER } from './main.js';
 export class Camera {
-    constructor(device, initialPosition, fov, aspect, near, far) {
+    constructor(device, initialPosition, fov, resolution, near, far) {
         this.device = device;
         this.fov = fov;
-        this.aspect = aspect;
+        this.resolution = resolution;
         this.near = near;
         this.far = far;
         this.position = initialPosition;
         this.rotation = quat.create();
         this.viewMatrix = mat4.create();
         this.projectionMatrix = mat4.create();
+        this.aspect = resolution[0] / resolution[1];
         // Create uniform buffer
         this.uniformBuffer = device.createBuffer({
-            size: 144,
+            size: 144 + 4,
             usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
         });
         this.updateViewMatrix();
@@ -30,9 +32,14 @@ export class Camera {
         mat4.perspective(this.projectionMatrix, this.fov, this.aspect, this.near, this.far);
         // Update GPU buffer
         this.device.queue.writeBuffer(this.uniformBuffer, 64, this.projectionMatrix);
+        this.updateResolution(WGPU_RENDERER.canvas.width, WGPU_RENDERER.canvas.height);
     }
     updateViewPosition() {
         this.device.queue.writeBuffer(this.uniformBuffer, 128, this.position);
+    }
+    updateResolution(w, h) {
+        this.resolution = vec2.fromValues(w, h);
+        this.device.queue.writeBuffer(this.uniformBuffer, 140, this.resolution);
     }
     updateAspectRatio(aspect) {
         this.aspect = aspect;
@@ -72,6 +79,9 @@ export class Camera {
     }
     getUniformBuffer() {
         return this.uniformBuffer;
+    }
+    getAspectRatio() {
+        return this.aspect;
     }
     reset() {
         this.position = vec3.fromValues(0, 0, 5);

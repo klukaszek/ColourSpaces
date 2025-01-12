@@ -1,37 +1,50 @@
 import { WGPU_RENDERER } from "../main.js";
 import { PointCloud } from "./pointcloud.js";
 export class LinearRGBCube extends PointCloud {
-    constructor(bitDepth) {
+    constructor(resolution) {
         let { ppmTexture, buffer } = WGPU_RENDERER.getPPMTextureData();
-        let numPoints = (2 ** bitDepth) ** 3;
+        let numPoints = resolution ** 3;
         if (ppmTexture !== undefined) {
             numPoints = ppmTexture.width * ppmTexture.height;
+            resolution = Math.floor(Math.sqrt(numPoints)); // approximate cubic resolution from 2D texture
         }
         super(numPoints);
         this.ComputeRGBCube = `
-    @group(0) @binding(0) var<storage, read_write> vertices: array<f32>;    
+    struct Dimensions {
+        resolution: u32,
+        padding: vec3<u32>,  // Padding to maintain 16-byte alignment
+    }
+
+    @group(0) @binding(0) var<storage, read_write> vertices: array<f32>;
+    @group(0) @binding(1) var<uniform> dimensions: Dimensions;
 
     @compute @workgroup_size(256)
     fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
-        let index = global_id.x + (global_id.y * 65535u * 256u);
+        let index = global_id.x + (global_id.y * dimensions.resolution * dimensions.resolution);
         if (index >= arrayLength(&vertices)) {
             return;
         }
 
-        // Generate RGB cube with normalize values between 0 and 1
+        // Calculate 3D position within the grid
+        let x = f32(index % dimensions.resolution);
+        let y = f32((index / dimensions.resolution) % dimensions.resolution);
+        let z = f32(index / (dimensions.resolution * dimensions.resolution));
+
+        // Normalize coordinates to [0,1] range
         let color = vec3<f32>(
-            f32(index % 256u) / 255.0,
-            f32((index / 256u) % 256u) / 255.0,
-            f32((index / 65536u) % 256u) / 255.0
+            x / f32(dimensions.resolution - 1u),
+            y / f32(dimensions.resolution - 1u),
+            z / f32(dimensions.resolution - 1u)
         );
 
         let pos_index = index * 6;
         
-        // 1x1x1 cube centered at origin
-        vertices[pos_index] = f32(index % 256u) / 255.0;
-        vertices[pos_index + 1] = f32((index / 256u) % 256u) / 255.0;
-        vertices[pos_index + 2] = f32((index / 65536u) % 256u) / 255.0;
+        // Position (same as color for RGB cube)
+        vertices[pos_index] = color.r;
+        vertices[pos_index + 1] = color.g;
+        vertices[pos_index + 2] = color.b;
 
+        // Color
         vertices[pos_index + 3] = color.r;
         vertices[pos_index + 4] = color.g;
         vertices[pos_index + 5] = color.b;
@@ -39,10 +52,11 @@ export class LinearRGBCube extends PointCloud {
         this.RGBCubeFromPPM = `
     @group(0) @binding(0) var<storage, read_write> rgb: array<u32>;
     @group(0) @binding(1) var<storage, read_write> vertices: array<f32>;
+    @group(0) @binding(2) var<uniform> dimensions: Dimensions;
 
     @compute @workgroup_size(256)
     fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
-        let index = global_id.x + (global_id.y * 65535u * 256u);
+        let index = global_id.x + (global_id.y * dimensions.resolution * dimensions.resolution);
         if (index >= arrayLength(&vertices)) {
             return;
         }
@@ -56,7 +70,7 @@ export class LinearRGBCube extends PointCloud {
 
         let pos_index = index * 6;
 
-        // 1x1x1 cube centered at origin
+        // Position and color are the same for RGB cube
         vertices[pos_index] = r;
         vertices[pos_index + 1] = g;
         vertices[pos_index + 2] = b;
@@ -64,13 +78,21 @@ export class LinearRGBCube extends PointCloud {
         vertices[pos_index + 3] = r;
         vertices[pos_index + 4] = g;
         vertices[pos_index + 5] = b;
-    }
-`;
+    }`;
         this.rgbComputePipeline = null;
         this.rgbBindGroup = null;
         this.rgbBuffer = null;
         this.ppmTexture = null;
         this.numPoints = numPoints;
+        // Create dimensions uniform buffer
+        this.dimensionsBuffer = WGPU_RENDERER.device.createBuffer({
+            size: 32, // uint32 + padding
+            usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+            mappedAtCreation: true,
+        });
+        // Write resolution to buffer
+        new Uint32Array(this.dimensionsBuffer.getMappedRange()).set([resolution, 0, 0, 0]); // Include padding
+        this.dimensionsBuffer.unmap();
         if (ppmTexture !== undefined) {
             this.ppmTexture = ppmTexture;
             this.rgbBuffer = buffer;
@@ -85,6 +107,11 @@ export class LinearRGBCube extends PointCloud {
                         binding: 1,
                         visibility: GPUShaderStage.COMPUTE,
                         buffer: { type: 'storage' }
+                    },
+                    {
+                        binding: 2,
+                        visibility: GPUShaderStage.COMPUTE,
+                        buffer: { type: 'uniform' }
                     }
                 ]
             });
@@ -98,6 +125,10 @@ export class LinearRGBCube extends PointCloud {
                     {
                         binding: 1,
                         resource: { buffer: this.vertexBuffer }
+                    },
+                    {
+                        binding: 2,
+                        resource: { buffer: this.dimensionsBuffer }
                     }
                 ]
             });
@@ -110,6 +141,11 @@ export class LinearRGBCube extends PointCloud {
                         binding: 0,
                         visibility: GPUShaderStage.COMPUTE,
                         buffer: { type: 'storage' }
+                    },
+                    {
+                        binding: 1,
+                        visibility: GPUShaderStage.COMPUTE,
+                        buffer: { type: 'uniform' }
                     }
                 ]
             });
@@ -119,6 +155,10 @@ export class LinearRGBCube extends PointCloud {
                     {
                         binding: 0,
                         resource: { buffer: this.vertexBuffer }
+                    },
+                    {
+                        binding: 1,
+                        resource: { buffer: this.dimensionsBuffer }
                     }
                 ]
             });

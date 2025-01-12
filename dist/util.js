@@ -24,4 +24,15 @@ export class util {
         }
         return { width, height, maxval, data: Uint8Array.from(new_pixels) };
     }
+    static hex2rgb(hex) {
+        if (hex.length !== 7) {
+            throw new Error('Invalid hex color');
+        }
+        return {
+            r: parseInt(hex.slice(1, 3), 16) / 255,
+            g: parseInt(hex.slice(3, 5), 16) / 255,
+            b: parseInt(hex.slice(5, 7), 16) / 255,
+            a: 255
+        };
+    }
 }

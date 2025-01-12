@@ -4,13 +4,13 @@
 //
 // Description: This file contains the Renderer class which is responsible for rendering object3D objects to the screen.
 
-import { vec3, quat } from 'gl-matrix';
+import { vec2, vec3, quat } from 'gl-matrix';
 import { Camera } from './camera.js';
 import { InputManager } from './input.js';
 // Essentially unused but my renderer will yell at me if I don't import it
 import { CIELUVPointCloud } from './pointclouds/cieluv.js';
 import { PointCloud } from './pointclouds/pointcloud.js';
-import { WGPU_RENDERER } from './main.js';
+import { WGPU_RENDERER, IS_MOBILE } from './main.js';
 import { LinearRGBCube } from './pointclouds/linearrgbcube.js';
 
 export interface Transform {
@@ -84,6 +84,7 @@ export class Renderer {
 
     private lastFrameTime: number = 0;
     private frameCount: number = 0;
+    private backgroundColor: Color = { r: 0.5, g: 0.5, b: 0.5, a: 1.0 };
 
     // Scene objects
     private pointCloud!: PointCloud;
@@ -93,13 +94,19 @@ export class Renderer {
     public animateRotation: boolean = true;
 
     public currentColorSpace: ColorSpace = ColorSpace.CIELUV;
+    public colorSpaceResolution: number = 128;
 
-    constructor(private canvas: HTMLCanvasElement) { }
+    constructor(public canvas: HTMLCanvasElement) { }
 
     // Initialize the renderer with a controllable first person camera.
     async init() {
         if (!navigator.gpu) {
             throw new Error("WebGPU not supported");
+        }
+        
+        // Set the colour space grid resolution to 64 for mobile devices
+        if (IS_MOBILE) {
+            this.colorSpaceResolution = 64;
         }
 
         // Request an adapter
@@ -110,7 +117,7 @@ export class Renderer {
 
         this.limits = this.adapter.limits;
 
-        const maxBufferBindingSize = this.adapter.limits.maxStorageBufferBindingSize;
+        const maxBufferBindingSize = this.limits.maxStorageBufferBindingSize;
 
         // Create a GPUDevice
         // I specified some limits here to ensure that the device can handle large buffers
@@ -166,15 +173,15 @@ export class Renderer {
         this.camera = new Camera(
             this.device,
             vec3.fromValues(0, 0, 3),
-            60 * Math.PI / 180,    // fov in radians
-            this.canvas.width / this.canvas.height, // aspect ratio
-            0.05,                   // near
+            90 * Math.PI / 180,    // fov in radians
+            vec2.fromValues(this.canvas.width, this.canvas.height), // resolution
+            0.01,                   // near
             100.0                  // far
         );
 
         // Create controls manager
         this.controls = new InputManager(this.camera, this.canvas);
-        this.pointCloud = new CIELUVPointCloud(256);
+        this.pointCloud = new CIELUVPointCloud(this.colorSpaceResolution);
         await this.pointCloud.generateCloud();
     }
 
@@ -200,7 +207,7 @@ export class Renderer {
             colorAttachments: [{
                 view: this.msaa.view,
                 resolveTarget: this.resolve.view,
-                clearValue: { r: 0.5, g: 0.5, b: 0.5, a: 1.0 },
+                clearValue: this.backgroundColor,
                 loadOp: 'clear',
                 storeOp: 'store'
             }],
@@ -289,20 +296,39 @@ export class Renderer {
         this.pointCloud.destroy();
     }
 
+    public updateResolution(resolution: number) {
+        this.colorSpaceResolution = resolution;
+        this.releasePointcloud();
+        switch (this.currentColorSpace) {
+            case ColorSpace.CIELUV:
+                this.setPointCloud(new CIELUVPointCloud(resolution));
+                break;
+            case ColorSpace.sRGB:
+                this.setPointCloud(new LinearRGBCube(resolution));
+                break;
+            default:
+                console.error("Invalid color space");
+        }
+    }
+
     public setColorSpace(colorSpace: ColorSpace) {
         this.releasePointcloud();
         switch (colorSpace) {
             case ColorSpace.CIELUV:
                 this.currentColorSpace = ColorSpace.CIELUV;
-                this.setPointCloud(new CIELUVPointCloud(256));
+                this.setPointCloud(new CIELUVPointCloud(this.colorSpaceResolution));
                 break;
             case ColorSpace.sRGB:
                 this.currentColorSpace = ColorSpace.sRGB;
-                this.setPointCloud(new LinearRGBCube(8));
+                this.setPointCloud(new LinearRGBCube(this.colorSpaceResolution));
                 break;
             default:
                 console.error("Invalid color space");
         }
+    }
+
+    public setBGColor(color: Color) {
+        this.backgroundColor = color;
     }
 
     public get framecount(): number {

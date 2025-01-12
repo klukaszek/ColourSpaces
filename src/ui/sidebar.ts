@@ -81,7 +81,7 @@ export class Sidebar {
         `;
 
         this.toggleButton.className = 'sidebar-toggle';
-        this.toggleButton.innerHTML = '→';
+        this.toggleButton.textContent = '→';
         this.toggleButton.style.cssText = `
             position: absolute;
             left: -30px;
@@ -89,14 +89,13 @@ export class Sidebar {
             transform: translateY(-50%);
             width: 30px;
             height: 60px;
+            color: #505050;
             background: rgba(255, 255, 255, 0.1); /* Transparent background */
             border: 1px solid rgba(45, 45, 45, 0.3); /* Subtle border */
             backdrop-filter: blur(10px); /* Frosted glass effect */
             -webkit-backdrop-filter: blur(10px); /* For Safari */
             border-radius: 10px; /* Rounded corners */
             box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); /* Subtle shadow */
-            color: #ffffff;
-            color: white;
             cursor: pointer;
             padding: 5px;
             display: flex;
@@ -356,7 +355,7 @@ export class Sidebar {
     }
 
     public addDefaultColourSpaces(): void {
-        
+
         const colourSpacesSection = this.addSection('🌈 Colour Spaces', true);
         const colourSpacesContainer = document.createElement('div');
         colourSpacesContainer.style.cssText = `
@@ -370,7 +369,7 @@ export class Sidebar {
         margin-left: 5px;
         margin-right: 5px;
     `;
-        
+
 
         let keys = Object.keys(ColorSpace);
 
@@ -406,5 +405,120 @@ export class Sidebar {
 
         colourSpacesSection.appendChild(colourSpacesContainer);
         this.content.appendChild(colourSpacesSection);
+    }
+
+    public addResolutionScale(): void {
+        const resolutionSection = this.addSection('📏 Resolution Scale', true);
+        const resolutionContainer = document.createElement('div');
+        resolutionContainer.style.cssText = `
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        padding: 10px;
+        background-color: rgba(45, 45, 45, 0.5);
+        border: 1px solid rgba(22, 22, 22, 0.6);
+        border-radius: 4px;
+        margin-left: 5px;
+        margin-right: 5px;
+    `;
+
+        const sliderContainer = document.createElement('div');
+        sliderContainer.style.cssText = `
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+    `;
+
+        const valueDisplay = document.createElement('div');
+        valueDisplay.style.cssText = `
+        color: #fff;
+        font-size: 16px;
+    `;
+
+        const slider = document.createElement('input');
+        slider.type = 'range';
+        slider.min = '8';
+        slider.max = '440';
+        slider.step = '8';
+        slider.value = WGPU_RENDERER.colorSpaceResolution.toString();
+        slider.style.cssText = `
+        width: 100%;
+        margin: 10px 0;
+        accent-color: #404040;
+    `;
+
+        const disclaimer = document.createElement('p');
+        disclaimer.textContent = 'Higher resolutions may exceed device\'s max buffer size. TODO: Create buffers for each grid cell.';
+        disclaimer.style.cssText = `
+        color: #fff;
+        font-size: 10px;
+        text-align: center;
+        margin-top: 0;
+    `;
+
+        // Update display and WGPU_RENDERER when slider value changes
+        const updateValue = () => {
+            const value = parseInt(slider.value);
+            valueDisplay.textContent = `Resolution: ${value}x${value}x${value}`;
+            WGPU_RENDERER.updateResolution(value);
+        };
+
+        slider.addEventListener('input', updateValue);
+
+        // Set initial value
+        updateValue();
+
+        sliderContainer.appendChild(valueDisplay);
+        sliderContainer.appendChild(slider);
+        sliderContainer.appendChild(disclaimer);
+        resolutionContainer.appendChild(sliderContainer);
+        resolutionSection.appendChild(resolutionContainer);
+        this.content.appendChild(resolutionSection);
+    }
+
+    public addBackgroundColour(): void {
+        const backgroundSection = this.addSection('🎨 Background Colour', true);
+        const backgroundContainer = document.createElement('div');
+        backgroundContainer.style.cssText = `
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        padding: 10px;
+        background-color: rgba(45, 45, 45, 0.5);
+        border: 1px solid rgba(22, 22, 22, 0.6);
+        border-radius: 4px;
+        margin-left: 5px;
+        margin-right: 5px;
+    `;
+
+        const colorInput = document.createElement('input');
+        colorInput.id = 'background-color';
+        colorInput.type = 'color';
+        colorInput.value = '#505050';
+        colorInput.style.cssText = `
+        width: 100%;
+        height: 40px;
+        padding: 8px;
+        border-radius: 4px;
+        font-size: 14px;
+    `;
+
+        const colorLabel = document.createElement('label');
+        colorLabel.htmlFor = 'background-color';
+        colorLabel.textContent = 'Change Background Colour:';
+        colorLabel.style.cssText = `
+        color: #fff;
+        font-size: 16px;
+    `;
+
+        colorInput.addEventListener('input', () => {
+            const color = colorInput.value.toString();
+            WGPU_RENDERER.setBGColor(util.hex2rgb(color));
+        });
+
+        backgroundContainer.appendChild(colorLabel);
+        backgroundContainer.appendChild(colorInput);
+        backgroundSection.appendChild(backgroundContainer);
+        this.content.appendChild(backgroundSection);
     }
 }

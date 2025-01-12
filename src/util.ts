@@ -2,6 +2,13 @@
 
 import { PPMTexture } from "./renderer.js";
 
+interface Color {
+    r: number;
+    g: number;
+    b: number;
+    a: number;
+}
+
 export class util {
 
     public static parsePPM3(ppmText: string): PPMTexture | null {
@@ -34,4 +41,16 @@ export class util {
         return { width, height, maxval, data: Uint8Array.from(new_pixels) };
     }
 
+
+    public static hex2rgb(hex: string): Color {
+        if (hex.length !== 7) {
+            throw new Error('Invalid hex color');
+        }
+        return {
+            r: parseInt(hex.slice(1, 3), 16) / 255,
+            g: parseInt(hex.slice(3, 5), 16) / 255,
+            b: parseInt(hex.slice(5, 7), 16) / 255,
+            a: 255
+        };
+    }
 }

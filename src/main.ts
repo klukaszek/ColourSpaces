@@ -8,6 +8,7 @@ const renderer = new Renderer(canvas)!;
 
 export const WGPU_RENDERER = renderer;
 export const WGPU_SIDEBAR = sidebar;
+export const IS_MOBILE = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ? true : false;
 
 // Program entrypoint
 async function main() {
@@ -20,6 +21,8 @@ async function main() {
     sidebar.addControls();
     sidebar.addPPMUploadButton();
     sidebar.addDefaultColourSpaces();
+    sidebar.addResolutionScale();
+    sidebar.addBackgroundColour();
 
     function frame(timestamp: number) {
         renderer.render(timestamp);
@@ -38,6 +41,7 @@ window.addEventListener('resize', () => {
 
     // Update the camera aspect ratio
     renderer.camera.updateAspectRatio(canvas.width / canvas.height);
+    renderer.camera.updateResolution(canvas.width, canvas.height);
 
     // Resize the MSAA texture to match the canvas size
     renderer.msaa.texture.destroy()!;
